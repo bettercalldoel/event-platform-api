@@ -51,6 +51,6 @@ export class UpdateEventDTO {
   isPublished?: boolean;
 
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ require_protocol: true })
   imageUrl?: string;
 }

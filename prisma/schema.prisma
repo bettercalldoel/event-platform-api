@@ -48,11 +48,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  events        Event[]        @relation("OrganizerEvents")
-  transactions  Transaction[]  @relation("CustomerTransactions")
-  coupons       Coupon[]
-  pointLedger   PointLedger[]
-  reviews       Review[]
+  events       Event[]        @relation("OrganizerEvents")
+  transactions Transaction[]  @relation("CustomerTransactions")
+  coupons      Coupon[]
+  pointLedger  PointLedger[]
+  reviews      Review[]
 
   @@index([role])
   @@index([referredById])
@@ -85,10 +85,10 @@ model Event {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ticketTypes   TicketType[]
-  vouchers      Voucher[]
-  transactions  Transaction[]
-  reviews       Review[]
+  ticketTypes  TicketType[]
+  vouchers     Voucher[]
+  transactions Transaction[]
+  reviews      Review[]
 
   @@index([startAt])
   @@index([category])
@@ -129,7 +129,7 @@ model Voucher {
   endAt   DateTime
 
   maxUses   Int?
-  usedCount Int  @default(0)
+  usedCount Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -146,7 +146,7 @@ model Coupon {
   userId Int
   user   User @relation(fields: [userId], references: [id])
 
-  code           String   @unique
+  code           String @unique
   discountAmount Int
   expiresAt      DateTime
 
@@ -169,8 +169,8 @@ model PointLedger {
 
   amount Int
   reason PointReason
-  expiresAt DateTime?
 
+  expiresAt     DateTime?
   transactionId Int?
   referenceId   String?
 
@@ -212,9 +212,9 @@ model Transaction {
   paymentProofUrl        String?
   paymentProofUploadedAt DateTime?
 
-  paymentDueAt DateTime
-  decisionDueAt DateTime?
-  decidedAt DateTime?
+  paymentDueAt   DateTime
+  decisionDueAt  DateTime?
+  decidedAt      DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

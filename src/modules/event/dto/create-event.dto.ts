@@ -42,8 +42,8 @@ export class CreateEventDTO {
   @IsBoolean()
   isPublished?: boolean;
 
-  // ✅ gabungan poster/thumbnail
+  // ✅ wajib ada supaya FE bisa kirim URL cloudinary
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ require_protocol: true })
   imageUrl?: string;
 }

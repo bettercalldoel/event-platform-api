@@ -117,6 +117,8 @@ export class EventService {
     const price = Number(body.price ?? 0);
     if (price < 0) throw new ApiError("price must be >= 0", 400);
 
+    const imageUrl = body.imageUrl ? String(body.imageUrl).trim() : null;
+
     const created = await this.prisma.event.create({
       data: {
         organizerId,
@@ -130,7 +132,7 @@ export class EventService {
         totalSeats,
         remainingSeats: totalSeats,
         isPublished: body.isPublished ?? true,
-        imageUrl: body.imageUrl ?? null, // ✅
+        imageUrl: imageUrl || null, // ✅ SIMPAN DI DB
       },
       select: { id: true },
     });
@@ -154,7 +156,10 @@ export class EventService {
     if (body.location !== undefined) data.location = body.location;
     if (body.isPublished !== undefined) data.isPublished = body.isPublished;
 
-    if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl || null; // ✅
+    if (body.imageUrl !== undefined) {
+      const v = String(body.imageUrl || "").trim();
+      data.imageUrl = v ? v : null;
+    }
 
     if (body.startAt !== undefined) {
       const d = new Date(body.startAt);

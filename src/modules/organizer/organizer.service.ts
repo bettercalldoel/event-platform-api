@@ -43,7 +43,9 @@ export class OrganizerService {
   };
 
   myTransactions = async (organizerId: number, status?: string) => {
-    const where: any = { event: { organizerId } };
+    const where: any = {
+      event: { organizerId },
+    };
     if (status) where.status = status;
 
     const items = await this.prisma.transaction.findMany({

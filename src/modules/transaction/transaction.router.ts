@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { JwtMiddleware } from "../../middlewares/jwt.middleware";
-import { requireCustomer, requireOrganizer } from "../../middlewares/role.middleware";
 import { validateBody } from "../../middlewares/validation.middleware";
+import { requireOrganizer } from "../../middlewares/role.middleware";
 import { TransactionController } from "./transaction.controller";
 import { CreateTransactionDTO } from "./dto/create-transaction.dto";
 import { UploadPaymentProofDTO } from "./dto/upload-payment-proof.dto";
@@ -19,38 +19,28 @@ export class TransactionRouter {
   }
 
   private initRoutes() {
-    // customer
-    this.router.post(
-      "/",
-      this.jwt.verifyToken(process.env.JWT_SECRET!),
-      requireCustomer,
-      validateBody(CreateTransactionDTO),
-      this.controller.create
-    );
-
+    // CUSTOMER
     this.router.get(
       "/me",
       this.jwt.verifyToken(process.env.JWT_SECRET!),
-      requireCustomer,
-      this.controller.me
+      this.controller.myTransactions
+    );
+
+    this.router.post(
+      "/",
+      this.jwt.verifyToken(process.env.JWT_SECRET!),
+      validateBody(CreateTransactionDTO),
+      this.controller.create
     );
 
     this.router.post(
       "/:id/payment-proof",
       this.jwt.verifyToken(process.env.JWT_SECRET!),
-      requireCustomer,
       validateBody(UploadPaymentProofDTO),
-      this.controller.uploadProof
+      this.controller.uploadPaymentProof
     );
 
-    // organizer
-    this.router.get(
-      "/organizer",
-      this.jwt.verifyToken(process.env.JWT_SECRET!),
-      requireOrganizer,
-      this.controller.organizerList
-    );
-
+    // ORGANIZER
     this.router.patch(
       "/:id/accept",
       this.jwt.verifyToken(process.env.JWT_SECRET!),

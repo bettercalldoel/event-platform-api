@@ -1,15 +1,14 @@
-import { NextFunction, Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
+import { ApiError } from "../utils/api-error";
 
-export function requireOrganizer(_req: Request, res: Response, next: NextFunction) {
-  const user = res.locals.user;
-  if (!user) return res.status(401).json({ message: "Unauthorized" });
-  if (user.role !== "ORGANIZER") return res.status(403).json({ message: "Organizer only" });
+export function requireOrganizer(req: Request, res: Response, next: NextFunction) {
+  const role = res.locals.user?.role;
+  if (role !== "ORGANIZER") throw new ApiError("Forbidden (Organizer only)", 403);
   next();
 }
 
-export function requireCustomer(_req: Request, res: Response, next: NextFunction) {
-  const user = res.locals.user;
-  if (!user) return res.status(401).json({ message: "Unauthorized" });
-  if (user.role !== "CUSTOMER") return res.status(403).json({ message: "Customer only" });
+export function requireCustomer(req: Request, res: Response, next: NextFunction) {
+  const role = res.locals.user?.role;
+  if (role !== "CUSTOMER") throw new ApiError("Forbidden (Customer only)", 403);
   next();
 }

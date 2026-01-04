@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { ApiError } from "../../utils/api-error";
 import { TransactionService } from "./transaction.service";
 
 export class TransactionController {
@@ -8,43 +9,60 @@ export class TransactionController {
     this.service = new TransactionService();
   }
 
+  myTransactions = async (req: Request, res: Response) => {
+    const userId = Number(res.locals.user?.id);
+    if (!userId) throw new ApiError("Unauthorized", 401);
+
+    const result = await this.service.myTransactions(userId);
+    return res.status(200).send(result);
+  };
+
   create = async (req: Request, res: Response) => {
-    const customerId = Number(res.locals.user.id);
-    const result = await this.service.create(customerId, req.body);
+    const userId = Number(res.locals.user?.id);
+    const role = String(res.locals.user?.role || "");
+    if (!userId) throw new ApiError("Unauthorized", 401);
+    if (role !== "CUSTOMER") throw new ApiError("Forbidden (Customer only)", 403);
+
+    const result = await this.service.create(req.body, userId);
     return res.status(201).send(result);
   };
 
-  uploadProof = async (req: Request, res: Response) => {
-    const customerId = Number(res.locals.user.id);
+  uploadPaymentProof = async (req: Request, res: Response) => {
+    const userId = Number(res.locals.user?.id);
+    const role = String(res.locals.user?.role || "");
+    if (!userId) throw new ApiError("Unauthorized", 401);
+    if (role !== "CUSTOMER") throw new ApiError("Forbidden (Customer only)", 403);
+
     const id = Number(req.params.id);
-    const result = await this.service.uploadPaymentProof(customerId, id, req.body);
+    if (!id || Number.isNaN(id)) throw new ApiError("Invalid transaction id", 400);
+
+    const result = await this.service.uploadPaymentProof(id, userId, req.body);
     return res.status(200).send(result);
   };
 
   accept = async (req: Request, res: Response) => {
-    const organizerId = Number(res.locals.user.id);
+    const organizerId = Number(res.locals.user?.id);
+    const role = String(res.locals.user?.role || "");
+    if (!organizerId) throw new ApiError("Unauthorized", 401);
+    if (role !== "ORGANIZER") throw new ApiError("Forbidden (Organizer only)", 403);
+
     const id = Number(req.params.id);
-    const result = await this.service.organizerAccept(organizerId, id);
+    if (!id || Number.isNaN(id)) throw new ApiError("Invalid transaction id", 400);
+
+    const result = await this.service.accept(id, organizerId);
     return res.status(200).send(result);
   };
 
   reject = async (req: Request, res: Response) => {
-    const organizerId = Number(res.locals.user.id);
+    const organizerId = Number(res.locals.user?.id);
+    const role = String(res.locals.user?.role || "");
+    if (!organizerId) throw new ApiError("Unauthorized", 401);
+    if (role !== "ORGANIZER") throw new ApiError("Forbidden (Organizer only)", 403);
+
     const id = Number(req.params.id);
-    const result = await this.service.organizerReject(organizerId, id);
-    return res.status(200).send(result);
-  };
+    if (!id || Number.isNaN(id)) throw new ApiError("Invalid transaction id", 400);
 
-  me = async (_req: Request, res: Response) => {
-    const customerId = Number(res.locals.user.id);
-    const result = await this.service.myTransactions(customerId);
-    return res.status(200).send(result);
-  };
-
-  organizerList = async (req: Request, res: Response) => {
-    const organizerId = Number(res.locals.user.id);
-    const eventId = req.query.eventId ? Number(req.query.eventId) : undefined;
-    const result = await this.service.organizerTransactions(organizerId, eventId);
+    const result = await this.service.reject(id, organizerId);
     return res.status(200).send(result);
   };
 }

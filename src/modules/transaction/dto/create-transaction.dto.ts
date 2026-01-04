@@ -1,14 +1,9 @@
-import { IsInt, IsOptional, IsString, Min } from "class-validator";
+import { IsInt, IsOptional, IsPositive, IsString, Min } from "class-validator";
 
 export class CreateTransactionDTO {
   @IsInt()
-  @Min(1)
+  @IsPositive()
   eventId!: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  ticketTypeId?: number;
 
   @IsInt()
   @Min(1)
