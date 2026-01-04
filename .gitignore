@@ -1,0 +1,48 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Node
+node_modules/
+
+# Env (SECRETS)
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Prisma generated client (optional; usually not committed)
+node_modules/.prisma/
+
+# Uploads lokal (kalau ada)
+uploads/
+tmp/
+temp/
+
+# Docker / DB data (kalau kamu bikin folder lokal untuk volume)
+db-data/
+postgres-data/
+data/
+
+# Runtime
+*.pid
