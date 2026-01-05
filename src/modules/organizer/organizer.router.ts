@@ -16,7 +16,7 @@ export class OrganizerRouter {
   }
 
   private initRoutes() {
-    // organizer only
+    // ✅ organizer only (dashboard)
     this.router.get(
       "/events",
       this.jwt.verifyToken(process.env.JWT_SECRET!),
@@ -24,13 +24,15 @@ export class OrganizerRouter {
       this.controller.myEvents
     );
 
-    // optional: kalau mau endpoint versi rapi untuk transaksi organizer
     this.router.get(
       "/transactions",
       this.jwt.verifyToken(process.env.JWT_SECRET!),
       requireOrganizer,
       this.controller.myTransactions
     );
+
+    // ✅ PUBLIC organizer profile (taruh PALING BAWAH biar nggak nangkep "/events")
+    this.router.get("/:id", this.controller.profile);
   }
 
   getRouter() {
