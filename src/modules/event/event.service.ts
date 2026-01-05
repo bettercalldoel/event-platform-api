@@ -43,7 +43,7 @@ export class EventService {
           endAt: true,
           price: true,
           remainingSeats: true,
-          imageUrl: true, // ✅
+          imageUrl: true,
           organizer: { select: { id: true, name: true } },
         },
       }),
@@ -76,12 +76,15 @@ export class EventService {
         totalSeats: true,
         remainingSeats: true,
         isPublished: true,
-        imageUrl: true, // ✅
+        imageUrl: true,
+
         organizer: { select: { id: true, name: true } },
+
         ticketTypes: {
           select: { id: true, name: true, price: true, remainingSeats: true },
           orderBy: { id: "asc" },
         },
+
         vouchers: {
           where: { startAt: { lte: now }, endAt: { gte: now } },
           select: {
@@ -132,7 +135,7 @@ export class EventService {
         totalSeats,
         remainingSeats: totalSeats,
         isPublished: body.isPublished ?? true,
-        imageUrl: imageUrl || null, // ✅ SIMPAN DI DB
+        imageUrl: imageUrl || null,
       },
       select: { id: true },
     });
@@ -156,11 +159,6 @@ export class EventService {
     if (body.location !== undefined) data.location = body.location;
     if (body.isPublished !== undefined) data.isPublished = body.isPublished;
 
-    if (body.imageUrl !== undefined) {
-      const v = String(body.imageUrl || "").trim();
-      data.imageUrl = v ? v : null;
-    }
-
     if (body.startAt !== undefined) {
       const d = new Date(body.startAt);
       if (Number.isNaN(d.getTime())) throw new ApiError("Invalid startAt", 400);
@@ -181,6 +179,7 @@ export class EventService {
       data.price = price;
     }
 
+    // kalau totalSeats diubah: jaga remainingSeats tidak melebihi totalSeats
     if (body.totalSeats !== undefined) {
       const newTotal = Number(body.totalSeats);
       if (!newTotal || newTotal < 1) throw new ApiError("totalSeats must be >= 1", 400);
@@ -190,6 +189,12 @@ export class EventService {
 
       data.totalSeats = newTotal;
       data.remainingSeats = newTotal - used;
+    }
+
+    // ✅ imageUrl update / remove
+    if (body.imageUrl !== undefined) {
+      const raw = String(body.imageUrl).trim();
+      data.imageUrl = raw ? raw : null; // "" => null
     }
 
     await this.prisma.event.update({ where: { id }, data });

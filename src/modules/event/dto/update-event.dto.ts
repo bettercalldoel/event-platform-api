@@ -1,13 +1,4 @@
-import {
-  IsBoolean,
-  IsDateString,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUrl,
-  Min,
-  MinLength,
-} from "class-validator";
+import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, IsUrl, Min, MinLength } from "class-validator";
 
 export class UpdateEventDTO {
   @IsOptional()
@@ -50,7 +41,13 @@ export class UpdateEventDTO {
   @IsBoolean()
   isPublished?: boolean;
 
+  /**
+   * ✅ imageUrl:
+   * - kalau diisi string URL => update imageUrl
+   * - kalau ingin hapus, FE kirim imageUrl: "" (string kosong)
+   */
   @IsOptional()
-  @IsUrl({ require_protocol: true })
+  @IsString()
+  @IsUrl({ require_protocol: true }, { message: "imageUrl must be a valid URL (https://...)" })
   imageUrl?: string;
 }

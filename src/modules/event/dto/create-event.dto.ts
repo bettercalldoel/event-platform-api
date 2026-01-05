@@ -1,13 +1,4 @@
-import {
-  IsBoolean,
-  IsDateString,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUrl,
-  Min,
-  MinLength,
-} from "class-validator";
+import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, IsUrl, Min, MinLength } from "class-validator";
 
 export class CreateEventDTO {
   @IsString()
@@ -30,6 +21,7 @@ export class CreateEventDTO {
   @IsDateString()
   endAt!: string;
 
+  // IDR, 0 = free
   @IsInt()
   @Min(0)
   price!: number;
@@ -42,8 +34,9 @@ export class CreateEventDTO {
   @IsBoolean()
   isPublished?: boolean;
 
-  // ✅ wajib ada supaya FE bisa kirim URL cloudinary
+  // ✅ 1 gambar untuk poster/thumbnail
   @IsOptional()
+  @IsString()
   @IsUrl({ require_protocol: true })
   imageUrl?: string;
 }
