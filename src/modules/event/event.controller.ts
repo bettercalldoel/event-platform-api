@@ -41,6 +41,7 @@ export class EventController {
     return res.status(200).send(result);
   };
 
+  // ===== vouchers =====
   createVoucher = async (req: Request, res: Response) => {
     const organizerId = Number(res.locals.user?.id);
     if (!organizerId) throw new ApiError("Unauthorized", 401);
@@ -49,6 +50,63 @@ export class EventController {
     if (!eventId || Number.isNaN(eventId)) throw new ApiError("Invalid event id", 400);
 
     const result = await this.service.createVoucher(eventId, req.body, organizerId);
+    return res.status(201).send(result);
+  };
+
+  listVouchers = async (req: Request, res: Response) => {
+    const organizerId = Number(res.locals.user?.id);
+    if (!organizerId) throw new ApiError("Unauthorized", 401);
+
+    const eventId = Number(req.params.id);
+    if (!eventId || Number.isNaN(eventId)) throw new ApiError("Invalid event id", 400);
+
+    const result = await this.service.listVouchers(eventId, organizerId);
+    return res.status(200).send(result);
+  };
+
+  updateVoucher = async (req: Request, res: Response) => {
+    const organizerId = Number(res.locals.user?.id);
+    if (!organizerId) throw new ApiError("Unauthorized", 401);
+
+    const eventId = Number(req.params.id);
+    const voucherId = Number(req.params.voucherId);
+    if (!eventId || Number.isNaN(eventId)) throw new ApiError("Invalid event id", 400);
+    if (!voucherId || Number.isNaN(voucherId)) throw new ApiError("Invalid voucher id", 400);
+
+    const result = await this.service.updateVoucher(eventId, voucherId, req.body, organizerId);
+    return res.status(200).send(result);
+  };
+
+  deleteVoucher = async (req: Request, res: Response) => {
+    const organizerId = Number(res.locals.user?.id);
+    if (!organizerId) throw new ApiError("Unauthorized", 401);
+
+    const eventId = Number(req.params.id);
+    const voucherId = Number(req.params.voucherId);
+    if (!eventId || Number.isNaN(eventId)) throw new ApiError("Invalid event id", 400);
+    if (!voucherId || Number.isNaN(voucherId)) throw new ApiError("Invalid voucher id", 400);
+
+    const result = await this.service.deleteVoucher(eventId, voucherId, organizerId);
+    return res.status(200).send(result);
+  };
+
+  // ===== reviews =====
+  listReviews = async (req: Request, res: Response) => {
+    const eventId = Number(req.params.id);
+    if (!eventId || Number.isNaN(eventId)) throw new ApiError("Invalid event id", 400);
+
+    const result = await this.service.listReviews(eventId);
+    return res.status(200).send(result);
+  };
+
+  createReview = async (req: Request, res: Response) => {
+    const userId = Number(res.locals.user?.id);
+    if (!userId) throw new ApiError("Unauthorized", 401);
+
+    const eventId = Number(req.params.id);
+    if (!eventId || Number.isNaN(eventId)) throw new ApiError("Invalid event id", 400);
+
+    const result = await this.service.createReview(eventId, req.body, userId);
     return res.status(201).send(result);
   };
 }

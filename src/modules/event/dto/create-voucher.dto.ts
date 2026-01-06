@@ -7,7 +7,13 @@ export class CreateVoucherDTO {
 
   @IsInt()
   @Min(1)
-  discountAmount!: number; // IDR
+  discountAmount!: number;
+
+  // ✅ minimal subtotal agar voucher bisa dipakai
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  minSubtotal?: number;
 
   @IsDateString()
   startAt!: string;

@@ -1,42 +1,85 @@
-import { createTransport, Transporter } from "nodemailer";
-import { MAIL_PASS, MAIL_USER } from "../../config/env";
+import nodemailer from "nodemailer";
+import fs from "fs";
 import path from "path";
-import fs from "fs/promises";
-import handlebars from "handlebars";
 
 export class MailService {
-  transporter: Transporter;
+  private transporter: nodemailer.Transporter | null = null;
 
   constructor() {
-    this.transporter = createTransport({
-      service: "gmail",
-      auth: {
-        user: MAIL_USER,
-        pass: MAIL_PASS,
-      },
-    });
+    // kalau env belum lengkap, biarkan null (supaya tidak crash saat dev/build)
+    const host = process.env.SMTP_HOST;
+    const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (host && port && user && pass) {
+      this.transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: { user, pass },
+      });
+    }
   }
 
-  private renderTemplate = async (templateName: string, context: object) => {
-    const templateDir = path.resolve(__dirname, "./templates");
-    const templatePath = path.join(templateDir, `${templateName}.hbs`);
-    const templateSource = await fs.readFile(templatePath, "utf-8");
-    const compiledTemplate = handlebars.compile(templateSource);
-    return compiledTemplate(context);
-  };
+  private renderTemplate(templateName: string, data: Record<string, any>) {
+    // cari file template: src/modules/mail/templates/<templateName>.html
+    // NOTE: __dirname = dist/modules/mail (saat build), jadi templates harus ikut ke dist.
+    // kalau templates kamu belum ikut, tetap aman karena ada fallback plain text.
+    const templatePath = path.join(__dirname, "templates", `${templateName}.html`);
 
-  sendEmail = async (
+    let html = "";
+    try {
+      html = fs.readFileSync(templatePath, "utf-8");
+    } catch (e) {
+      // fallback html sederhana
+      html = `
+        <div style="font-family:Arial,sans-serif;line-height:1.5">
+          <h2>${templateName}</h2>
+          <pre style="background:#f6f6f6;padding:12px;border-radius:8px">${JSON.stringify(
+            data,
+            null,
+            2
+          )}</pre>
+        </div>
+      `;
+    }
+
+    // replace placeholder: {{key}}
+    for (const [k, v] of Object.entries(data || {})) {
+      const safeVal = String(v ?? "");
+      const re = new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, "g");
+      html = html.replace(re, safeVal);
+    }
+
+    return html;
+  }
+
+  async sendEmail(
     to: string,
     subject: string,
     templateName: string,
-    context: object
-  ) => {
-    const html = await this.renderTemplate(templateName, context);
+    data: Record<string, any>
+  ) {
+    // kalau transporter belum ready, jangan crash (dev/CI)
+    if (!this.transporter) {
+      console.log("[MAIL] transporter not configured. Skip sending email:", {
+        to,
+        subject,
+        templateName,
+        data,
+      });
+      return;
+    }
+
+    const from = process.env.MAIL_FROM || process.env.SMTP_USER || "no-reply@example.com";
+    const html = this.renderTemplate(templateName, data);
 
     await this.transporter.sendMail({
+      from,
       to,
       subject,
       html,
     });
-  };
+  }
 }
