@@ -93,7 +93,7 @@ export class TransactionService {
       });
       if (!event) throw new ApiError("Event not found", 404);
 
-      const basePrice = event.price; // MVP: pakai event.price (ticketType nanti)
+      const basePrice = event.price;
       const subtotal = basePrice * qty;
 
       // 2) voucher (optional)
@@ -112,7 +112,6 @@ export class TransactionService {
         });
         if (!v) throw new ApiError("Voucher not found / not active", 400);
 
-        // concurrency safe: increment usedCount only if still allowed
         if (v.maxUses !== null) {
           const upd = await tx.voucher.updateMany({
             where: { id: v.id, usedCount: { lt: v.maxUses } },
@@ -147,7 +146,6 @@ export class TransactionService {
         const afterVoucher = Math.max(0, subtotal - voucherDiscount);
         couponDiscount = Math.min(afterVoucher, c.discountAmount);
 
-        // mark as used (linked later with couponId)
         await tx.coupon.update({
           where: { id: c.id },
           data: { usedAt: now },
@@ -167,9 +165,7 @@ export class TransactionService {
       const total = Math.max(0, afterDiscount - pointsUsed);
 
       // 5) create transaction
-      const status =
-        total === 0 ? TransactionStatus.DONE : TransactionStatus.WAITING_FOR_PAYMENT;
-
+      const status = total === 0 ? TransactionStatus.DONE : TransactionStatus.WAITING_FOR_PAYMENT;
       const paymentDueAt = total === 0 ? now : addHours(now, 2);
 
       const created = await tx.transaction.create({
@@ -241,7 +237,6 @@ export class TransactionService {
       }
 
       if (now > trx.paymentDueAt) {
-        // auto-expire (rollback) if already overdue
         await this.rollbackTx(tx, trxId, TransactionStatus.EXPIRED, "PAYMENT_TIMEOUT");
         throw new ApiError("Payment due already passed. Transaction expired.", 400);
       }
@@ -263,12 +258,15 @@ export class TransactionService {
   accept = async (trxId: number, organizerId: number) => {
     const now = new Date();
 
+    // update status dulu (biar email gagal gak bikin status gagal)
     const trx = await this.prisma.transaction.findUnique({
       where: { id: trxId },
       select: {
         id: true,
         status: true,
         decidedAt: true,
+        decisionDueAt: true,
+        paymentProofUrl: true,
         event: { select: { organizerId: true, name: true } },
         customer: { select: { email: true, name: true } },
       },
@@ -280,12 +278,24 @@ export class TransactionService {
       throw new ApiError("Transaction is not waiting for admin confirmation", 400);
     }
 
+    // optional: kalau mau strict
+    if (!trx.paymentProofUrl) throw new ApiError("Payment proof is required", 400);
+
+    // optional: kalau decisionDueAt sudah lewat → auto reject/expired
+    if (trx.decisionDueAt && now > trx.decisionDueAt) {
+      throw new ApiError("Decision due already passed. Please reject (or handle auto-cancel scheduler).", 400);
+    }
+
     await this.prisma.transaction.update({
       where: { id: trxId },
-      data: { status: TransactionStatus.DONE, decidedAt: now },
+      data: {
+        status: TransactionStatus.DONE,
+        decidedAt: now,
+        decisionDueAt: null,
+      },
     });
 
-    // email (optional - jangan bikin crash kalau template belum ada)
+    // email notification (jangan bikin crash)
     try {
       await this.mail.sendEmail(
         trx.customer.email,
@@ -301,20 +311,14 @@ export class TransactionService {
   };
 
   reject = async (trxId: number, organizerId: number) => {
-    const now = new Date();
-
     return await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+
       const trx = await tx.transaction.findUnique({
         where: { id: trxId },
         select: {
           id: true,
           status: true,
-          eventId: true,
-          qty: true,
-          voucherId: true,
-          couponId: true,
-          pointsUsed: true,
-          ticketTypeId: true,
           event: { select: { organizerId: true, name: true } },
           customer: { select: { email: true, name: true } },
         },
@@ -326,6 +330,7 @@ export class TransactionService {
         throw new ApiError("Transaction is not waiting for admin confirmation", 400);
       }
 
+      // ✅ rollback seats/voucher/coupon/points + set status REJECTED
       await this.rollbackTx(tx, trxId, TransactionStatus.REJECTED, "REJECTED_BY_ORGANIZER");
 
       // email (optional)
@@ -336,7 +341,9 @@ export class TransactionService {
           "transaction-status",
           { name: trx.customer.name, eventName: trx.event.name, status: "REJECTED" }
         );
-      } catch (e) {}
+      } catch (e) {
+        // silent
+      }
 
       return { message: "transaction rejected" };
     });
@@ -418,6 +425,7 @@ export class TransactionService {
       data: {
         status: newStatus,
         decidedAt: now,
+        decisionDueAt: null,
       },
     });
   };

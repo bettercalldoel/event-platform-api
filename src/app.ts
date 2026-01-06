@@ -20,48 +20,26 @@ export class App {
     this.configure();
     this.routes();
     this.handleError();
-    initScheduler(); // ✅ auto expire & auto cancel
+    initScheduler();
   }
 
   private configure() {
     this.app.use(
       cors({
         origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
-        credentials: true,
       })
     );
-
-    this.app.use(express.json({ limit: "2mb" }));
+    this.app.use(express.json());
   }
 
   private routes() {
-    // ✅ Health
     this.app.get("/health", (_req, res) => res.status(200).json({ ok: true }));
 
-    // ✅ Auth
-    const authRouter = new AuthRouter();
-    this.app.use("/auth", authRouter.getRouter());
-
-    // ✅ Events (public list/detail + organizer create/update + vouchers + reviews)
-    const eventRouter = new EventRouter();
-    this.app.use("/events", eventRouter.getRouter());
-
-    // ✅ Transactions (customer create/upload proof + organizer accept/reject)
-    const trxRouter = new TransactionRouter();
-    this.app.use("/transactions", trxRouter.getRouter());
-
-    // ✅ Uploads (Cloudinary signature)
-    const uploadRouter = new UploadRouter();
-    this.app.use("/uploads", uploadRouter.getRouter());
-
-    // ✅ Organizer (dashboard routes + public organizer profile)
-    const organizerRouter = new OrganizerRouter();
-
-    // dashboard organizer: /organizer/events, /organizer/transactions
-    this.app.use("/organizer", organizerRouter.getRouter());
-
-    // public organizer profile: /organizers/:id
-    this.app.use("/organizers", organizerRouter.getRouter());
+    this.app.use("/auth", new AuthRouter().getRouter());
+    this.app.use("/events", new EventRouter().getRouter());
+    this.app.use("/transactions", new TransactionRouter().getRouter());
+    this.app.use("/uploads", new UploadRouter().getRouter());
+    this.app.use("/organizer", new OrganizerRouter().getRouter());
   }
 
   private handleError() {

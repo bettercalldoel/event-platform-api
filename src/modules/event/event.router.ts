@@ -6,20 +6,17 @@ import { EventController } from "./event.controller";
 import { CreateEventDTO } from "./dto/create-event.dto";
 import { UpdateEventDTO } from "./dto/update-event.dto";
 import { CreateVoucherDTO } from "./dto/create-voucher.dto";
-
-import { ReviewController } from "../review/review.controller";
-import { CreateReviewDTO } from "../review/dto/create-review.dto";
+import { UpdateVoucherDTO } from "./dto/update-voucher.dto";
+import { CreateReviewDTO } from "./dto/create-review.dto";
 
 export class EventRouter {
   router: Router;
   controller: EventController;
-  reviewController: ReviewController;
   jwt: JwtMiddleware;
 
   constructor() {
     this.router = Router();
     this.controller = new EventController();
-    this.reviewController = new ReviewController();
     this.jwt = new JwtMiddleware();
     this.initRoutes();
   }
@@ -29,17 +26,19 @@ export class EventRouter {
     this.router.get("/", this.controller.list);
     this.router.get("/:id", this.controller.detail);
 
-    // ✅ reviews (public list, customer create)
-    this.router.get("/:id/reviews", this.reviewController.listByEvent);
+    // reviews public list
+    this.router.get("/:id/reviews", this.controller.listReviews);
+
+    // customer create review
     this.router.post(
       "/:id/reviews",
       this.jwt.verifyToken(process.env.JWT_SECRET!),
       requireCustomer,
       validateBody(CreateReviewDTO),
-      this.reviewController.createForEvent
+      this.controller.createReview
     );
 
-    // organizer only
+    // organizer only event CRUD
     this.router.post(
       "/",
       this.jwt.verifyToken(process.env.JWT_SECRET!),
@@ -56,13 +55,35 @@ export class EventRouter {
       this.controller.update
     );
 
-    // voucher promotion per-event (organizer only)
+    // vouchers (organizer only)
     this.router.post(
       "/:id/vouchers",
       this.jwt.verifyToken(process.env.JWT_SECRET!),
       requireOrganizer,
       validateBody(CreateVoucherDTO),
       this.controller.createVoucher
+    );
+
+    this.router.get(
+      "/:id/vouchers",
+      this.jwt.verifyToken(process.env.JWT_SECRET!),
+      requireOrganizer,
+      this.controller.listVouchers
+    );
+
+    this.router.patch(
+      "/:id/vouchers/:voucherId",
+      this.jwt.verifyToken(process.env.JWT_SECRET!),
+      requireOrganizer,
+      validateBody(UpdateVoucherDTO),
+      this.controller.updateVoucher
+    );
+
+    this.router.delete(
+      "/:id/vouchers/:voucherId",
+      this.jwt.verifyToken(process.env.JWT_SECRET!),
+      requireOrganizer,
+      this.controller.deleteVoucher
     );
   }
 

@@ -123,13 +123,16 @@ model Voucher {
   event   Event @relation(fields: [eventId], references: [id])
 
   code           String @unique
-  discountAmount Int
+  discountAmount Int // IDR
+
+  // ✅ voucher bisa punya syarat minimum belanja (subtotal)
+  minSubtotal Int @default(0)
 
   startAt DateTime
   endAt   DateTime
 
   maxUses   Int?
-  usedCount Int @default(0)
+  usedCount Int  @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -140,6 +143,7 @@ model Voucher {
   @@index([startAt, endAt])
   @@map("vouchers")
 }
+
 
 model Coupon {
   id     Int  @id @default(autoincrement())

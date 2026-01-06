@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, IsUrl, Min, MinLength } from "class-validator";
+import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Min, MinLength } from "class-validator";
 
 export class CreateEventDTO {
   @IsString()
@@ -34,9 +34,8 @@ export class CreateEventDTO {
   @IsBoolean()
   isPublished?: boolean;
 
-  // ✅ 1 gambar untuk poster/thumbnail
+  // ✅ single image field
   @IsOptional()
   @IsString()
-  @IsUrl({ require_protocol: true })
   imageUrl?: string;
 }
