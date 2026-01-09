@@ -246,3 +246,16 @@ model Review {
   @@index([userId])
   @@map("reviews")
 }
+
+model Product {
+  id    Int    @id @default(autoincrement())
+  title String
+  price Int
+  image String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([title])
+  @@map("products")
+}
