@@ -8,6 +8,7 @@ import { ForgotPasswordDTO } from "./dto/forgot-password.dto";
 import { LoginDTO } from "./dto/login.dto";
 import { RegisterDTO } from "./dto/register.dto";
 import { ResetPasswordDTO } from "./dto/reset-password.dto";
+import { ChangePasswordDTO } from "./dto/change-password.dto";
 
 function addMonths(date: Date, months: number) {
   const d = new Date(date);
@@ -40,7 +41,7 @@ export class AuthService {
     const now = new Date();
     const expiresAt = addMonths(now, 3);
 
-    const couponAmount = Number(process.env.REFERRAL_COUPON_AMOUNT ?? "20000");
+    const couponAmount = Number(process.env.REFERRAL_COUPON_AMOUNT ?? "10000");
     const pointReward = Number(process.env.REFERRAL_POINT_REWARD ?? "10000");
 
     // generate unique referralCode for new user
@@ -178,5 +179,62 @@ export class AuthService {
     });
 
     return { message: "reset password success" };
+  };
+
+  changePassword = async (body: ChangePasswordDTO, authUserId: number) => {
+    const user = await this.prisma.user.findUnique({
+      where: { id: authUserId },
+      select: { id: true, password: true },
+    });
+    if (!user) throw new ApiError("User not found", 404);
+
+    const ok = await comparePassword(body.currentPassword, user.password);
+    if (!ok) throw new ApiError("Current password is incorrect", 400);
+
+    const hashedPassword = await hashPassword(body.newPassword);
+    await this.prisma.user.update({
+      where: { id: authUserId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: "password updated" };
+  };
+
+  referralSummary = async (authUserId: number) => {
+    const user = await this.prisma.user.findUnique({
+      where: { id: authUserId },
+      select: { referralCode: true },
+    });
+    if (!user) throw new ApiError("User not found", 404);
+
+    const agg = await this.prisma.pointLedger.aggregate({
+      where: { userId: authUserId, reason: "REFERRAL_REWARD" },
+      _sum: { amount: true },
+    });
+
+    return {
+      referralCode: user.referralCode,
+      referralPoints: Number(agg._sum.amount ?? 0),
+    };
+  };
+
+  myCoupons = async (authUserId: number) => {
+    const now = new Date();
+    const items = await this.prisma.coupon.findMany({
+      where: {
+        userId: authUserId,
+        usedAt: null,
+        expiresAt: { gt: now },
+      },
+      orderBy: { expiresAt: "asc" },
+      select: {
+        id: true,
+        code: true,
+        discountAmount: true,
+        expiresAt: true,
+      },
+    });
+
+    return { items };
   };
 }

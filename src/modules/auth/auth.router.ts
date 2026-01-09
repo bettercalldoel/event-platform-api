@@ -5,6 +5,7 @@ import { ForgotPasswordDTO } from "./dto/forgot-password.dto";
 import { LoginDTO } from "./dto/login.dto";
 import { RegisterDTO } from "./dto/register.dto";
 import { ResetPasswordDTO } from "./dto/reset-password.dto";
+import { ChangePasswordDTO } from "./dto/change-password.dto";
 import { JwtMiddleware } from "../../middlewares/jwt.middleware";
 
 export class AuthRouter {
@@ -33,6 +34,25 @@ export class AuthRouter {
       this.jwtMiddleware.verifyToken(process.env.JWT_SECRET_RESET!),
       validateBody(ResetPasswordDTO),
       this.authController.resetPassword
+    );
+
+    this.router.post(
+      "/change-password",
+      this.jwtMiddleware.verifyToken(process.env.JWT_SECRET!),
+      validateBody(ChangePasswordDTO),
+      this.authController.changePassword
+    );
+
+    this.router.get(
+      "/referral-summary",
+      this.jwtMiddleware.verifyToken(process.env.JWT_SECRET!),
+      this.authController.referralSummary
+    );
+
+    this.router.get(
+      "/coupons",
+      this.jwtMiddleware.verifyToken(process.env.JWT_SECRET!),
+      this.authController.myCoupons
     );
   };
 

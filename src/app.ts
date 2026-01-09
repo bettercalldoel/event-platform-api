@@ -10,6 +10,7 @@ import { EventRouter } from "./modules/event/event.router";
 import { TransactionRouter } from "./modules/transaction/transaction.router";
 import { UploadRouter } from "./modules/upload/upload.router";
 import { OrganizerRouter } from "./modules/organizer/organizer.router";
+import { PublicOrganizerRouter } from "./modules/organizer/public-organizer.router";
 
 import { initScheduler } from "./scripts";
 
@@ -56,6 +57,7 @@ export class App {
     this.app.use("/transactions", new TransactionRouter().getRouter());
     this.app.use("/uploads", new UploadRouter().getRouter());
     this.app.use("/organizer", new OrganizerRouter().getRouter());
+    this.app.use("/organizers", new PublicOrganizerRouter().getRouter());
   }
 
   private handleError() {
