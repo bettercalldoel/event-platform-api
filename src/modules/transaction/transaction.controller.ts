@@ -17,6 +17,14 @@ export class TransactionController {
     return res.status(200).send(result);
   };
 
+  myAttendedEvents = async (req: Request, res: Response) => {
+    const userId = Number(res.locals.user?.id);
+    if (!userId) throw new ApiError("Unauthorized", 401);
+
+    const result = await this.service.myAttendedEvents(userId);
+    return res.status(200).send(result);
+  };
+
   create = async (req: Request, res: Response) => {
     const userId = Number(res.locals.user?.id);
     const role = String(res.locals.user?.role || "");

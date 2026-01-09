@@ -1,13 +1,4 @@
-import {
-  IsBoolean,
-  IsDateString,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUrl,
-  Min,
-  MinLength,
-} from "class-validator";
+import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Min, MinLength } from "class-validator";
 
 export class UpdateEventDTO {
   @IsOptional()
@@ -50,7 +41,8 @@ export class UpdateEventDTO {
   @IsBoolean()
   isPublished?: boolean;
 
+  // ✅ single image field (poster+thumbnail digabung)
   @IsOptional()
-  @IsUrl({ require_protocol: true })
+  @IsString()
   imageUrl?: string;
 }

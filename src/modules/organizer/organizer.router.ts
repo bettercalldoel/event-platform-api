@@ -16,21 +16,30 @@ export class OrganizerRouter {
   }
 
   private initRoutes() {
-    // organizer only
-    this.router.get(
-      "/events",
-      this.jwt.verifyToken(process.env.JWT_SECRET!),
-      requireOrganizer,
-      this.controller.myEvents
-    );
+    // Semua route di bawah ini hanya untuk ORGANIZER
+    const auth = this.jwt.verifyToken(process.env.JWT_SECRET!);
 
-    // optional: kalau mau endpoint versi rapi untuk transaksi organizer
+    // My events
+    this.router.get("/events", auth, requireOrganizer, this.controller.myEvents);
+
+    // My transactions
     this.router.get(
       "/transactions",
-      this.jwt.verifyToken(process.env.JWT_SECRET!),
+      auth,
       requireOrganizer,
       this.controller.myTransactions
     );
+
+    // Attendees list per event
+    this.router.get(
+      "/events/:eventId/attendees",
+      auth,
+      requireOrganizer,
+      this.controller.attendees
+    );
+
+    // Stats (year / month / day)
+    this.router.get("/stats", auth, requireOrganizer, this.controller.stats);
   }
 
   getRouter() {

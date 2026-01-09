@@ -26,6 +26,12 @@ export class TransactionRouter {
       this.controller.myTransactions
     );
 
+    this.router.get(
+      "/me/attended",
+      this.jwt.verifyToken(process.env.JWT_SECRET!),
+      this.controller.myAttendedEvents
+    );
+
     this.router.post(
       "/",
       this.jwt.verifyToken(process.env.JWT_SECRET!),

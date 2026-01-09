@@ -1,6 +1,9 @@
 import { PrismaService } from "../prisma/prisma.service";
+import { ApiError } from "../../utils/api-error";
+import { TransactionStatus } from "@prisma/client";
 
 type EventSort = "NAME_ASC" | "NAME_DESC" | "DATE_ASC" | "DATE_DESC";
+type StatsRange = "year" | "month" | "day";
 
 export class OrganizerService {
   prisma: PrismaService;
@@ -9,6 +12,7 @@ export class OrganizerService {
     this.prisma = new PrismaService();
   }
 
+  // === My Events (list event milik organizer) ===
   myEvents = async (organizerId: number, sort?: string) => {
     const s = (sort as EventSort) || "DATE_ASC";
 
@@ -33,7 +37,7 @@ export class OrganizerService {
         totalSeats: true,
         remainingSeats: true,
         isPublished: true,
-        imageUrl: true, // ✅
+        imageUrl: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -42,11 +46,101 @@ export class OrganizerService {
     return { items };
   };
 
+  // === Public organizer profile (events + ratings + reviews) ===
+  publicProfile = async (organizerId: number) => {
+    const organizer = await this.prisma.user.findFirst({
+      where: { id: organizerId, role: "ORGANIZER" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatarUrl: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    if (!organizer) {
+      throw new ApiError("Organizer not found", 404);
+    }
+
+    const events = await this.prisma.event.findMany({
+      where: { organizerId, isPublished: true },
+      orderBy: { startAt: "asc" },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        location: true,
+        startAt: true,
+        endAt: true,
+        price: true,
+        remainingSeats: true,
+        imageUrl: true,
+      },
+    });
+
+    const eventIds = events.map((event) => event.id);
+    const ratingGroups =
+      eventIds.length === 0
+        ? []
+        : await this.prisma.review.groupBy({
+            by: ["eventId"],
+            where: { eventId: { in: eventIds } },
+            _avg: { rating: true },
+            _count: { _all: true },
+          });
+
+    const ratingMap = new Map<number, { avgRating: number | null; totalReviews: number }>();
+    for (const group of ratingGroups) {
+      ratingMap.set(group.eventId, {
+        avgRating: group._avg.rating ? Number(group._avg.rating) : null,
+        totalReviews: group._count._all ?? 0,
+      });
+    }
+
+    const eventItems = events.map((event) => {
+      const rating = ratingMap.get(event.id) ?? { avgRating: null, totalReviews: 0 };
+      return { ...event, ...rating };
+    });
+
+    const summaryAgg = await this.prisma.review.aggregate({
+      where: { event: { organizerId } },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+
+    const reviews = await this.prisma.review.findMany({
+      where: { event: { organizerId } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        user: { select: { id: true, name: true } },
+        event: { select: { id: true, name: true } },
+      },
+    });
+
+    return {
+      organizer,
+      summary: {
+        avgRating: summaryAgg._avg.rating ? Number(summaryAgg._avg.rating) : null,
+        totalReviews: summaryAgg._count._all ?? 0,
+      },
+      events: eventItems,
+      reviews,
+    };
+  };
+
+  // === My Transactions (transaksi untuk event milik organizer) ===
   myTransactions = async (organizerId: number, status?: string) => {
     const where: any = {
       event: { organizerId },
     };
-    if (status) where.status = status;
+    if (status) where.status = status as TransactionStatus;
 
     const items = await this.prisma.transaction.findMany({
       where,
@@ -57,12 +151,178 @@ export class OrganizerService {
         qty: true,
         totalAmount: true,
         paymentProofUrl: true,
+        paymentProofUploadedAt: true,
         createdAt: true,
-        event: { select: { id: true, name: true } },
-        customer: { select: { id: true, name: true, email: true } },
+        event: {
+          select: {
+            id: true,
+            name: true,
+            startAt: true,
+          },
+        },
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
     return { items };
+  };
+
+  // === Attendees list per event (DONE only) ===
+  attendees = async (organizerId: number, eventId: number) => {
+    const event = await this.prisma.event.findFirst({
+      where: {
+        id: eventId,
+        organizerId,
+      },
+      select: {
+        id: true,
+        name: true,
+        startAt: true,
+        location: true,
+      },
+    });
+
+    if (!event) {
+      throw new ApiError("Event not found or not yours", 404);
+    }
+
+    const items = await this.prisma.transaction.findMany({
+      where: {
+        eventId,
+        status: TransactionStatus.DONE,
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        qty: true,
+        totalAmount: true,
+        createdAt: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    const summary = items.reduce(
+      (acc, item) => {
+        acc.totalAttendees += 1;
+        acc.totalTickets += item.qty;
+        acc.totalRevenue += item.totalAmount;
+        return acc;
+      },
+      { totalAttendees: 0, totalTickets: 0, totalRevenue: 0 }
+    );
+
+    return {
+      event,
+      summary,
+      items,
+    };
+  };
+
+  // === Stats (year / month / day) ===
+  stats = async (organizerId: number, range: StatsRange = "year") => {
+    let rows: {
+      period: Date;
+      eventId: number;
+      eventName: string;
+      totalTickets: bigint;
+      totalRevenue: bigint;
+    }[] = [];
+
+    if (range === "month") {
+      rows = await this.prisma.$queryRaw<
+        {
+          period: Date;
+          eventId: number;
+          eventName: string;
+          totalTickets: bigint;
+          totalRevenue: bigint;
+        }[]
+      >`
+        SELECT
+          DATE_TRUNC('month', t."createdAt") AS "period",
+          e.id AS "eventId",
+          e.name AS "eventName",
+          SUM(t.qty)::bigint AS "totalTickets",
+          SUM(t."totalAmount")::bigint AS "totalRevenue"
+        FROM "transactions" t
+        JOIN "events" e ON e.id = t."eventId"
+        WHERE e."organizerId" = ${organizerId}
+          AND t.status = 'DONE'::"TransactionStatus"
+        GROUP BY "period", e.id, e.name
+        ORDER BY "period" ASC, "eventName" ASC
+      `;
+    } else if (range === "day") {
+      rows = await this.prisma.$queryRaw<
+        {
+          period: Date;
+          eventId: number;
+          eventName: string;
+          totalTickets: bigint;
+          totalRevenue: bigint;
+        }[]
+      >`
+        SELECT
+          DATE_TRUNC('day', t."createdAt") AS "period",
+          e.id AS "eventId",
+          e.name AS "eventName",
+          SUM(t.qty)::bigint AS "totalTickets",
+          SUM(t."totalAmount")::bigint AS "totalRevenue"
+        FROM "transactions" t
+        JOIN "events" e ON e.id = t."eventId"
+        WHERE e."organizerId" = ${organizerId}
+          AND t.status = 'DONE'::"TransactionStatus"
+        GROUP BY "period", e.id, e.name
+        ORDER BY "period" ASC, "eventName" ASC
+      `;
+    } else {
+      // default year
+      rows = await this.prisma.$queryRaw<
+        {
+          period: Date;
+          eventId: number;
+          eventName: string;
+          totalTickets: bigint;
+          totalRevenue: bigint;
+        }[]
+      >`
+        SELECT
+          DATE_TRUNC('year', t."createdAt") AS "period",
+          e.id AS "eventId",
+          e.name AS "eventName",
+          SUM(t.qty)::bigint AS "totalTickets",
+          SUM(t."totalAmount")::bigint AS "totalRevenue"
+        FROM "transactions" t
+        JOIN "events" e ON e.id = t."eventId"
+        WHERE e."organizerId" = ${organizerId}
+          AND t.status = 'DONE'::"TransactionStatus"
+        GROUP BY "period", e.id, e.name
+        ORDER BY "period" ASC, "eventName" ASC
+      `;
+    }
+
+    const items = rows.map((r) => ({
+      period: r.period,
+      eventId: r.eventId,
+      eventName: r.eventName,
+      totalTickets: Number(r.totalTickets || 0),
+      totalRevenue: Number(r.totalRevenue || 0),
+    }));
+
+    return {
+      range,
+      items,
+    };
   };
 }
