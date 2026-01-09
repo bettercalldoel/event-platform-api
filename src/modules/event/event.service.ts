@@ -2,6 +2,10 @@ import { PrismaService } from "../prisma/prisma.service";
 import { ApiError } from "../../utils/api-error";
 import { TransactionStatus } from "@prisma/client";
 
+const EVENT_CATEGORIES = ["Art", "Music", "Education", "Social", "Exhibition", "Showbiz"];
+const normalizeCategory = (value: string) =>
+  EVENT_CATEGORIES.find((item) => item.toLowerCase() === value.toLowerCase()) ?? null;
+
 export class EventService {
   prisma: PrismaService;
 
@@ -15,7 +19,7 @@ export class EventService {
     const skip = (page - 1) * limit;
 
     const q = String(query.q || "").trim();
-    const category = String(query.category || "").trim();
+    const categoryInput = String(query.category || "").trim();
     const location = String(query.location || "").trim();
     const time = String(query.time || "").trim().toLowerCase();
     const now = new Date();
@@ -28,7 +32,13 @@ export class EventService {
         { description: { contains: q, mode: "insensitive" } },
       ];
     }
-    if (category) where.category = { contains: category, mode: "insensitive" };
+    if (categoryInput) {
+      const category = normalizeCategory(categoryInput);
+      if (!category) {
+        throw new ApiError(`Invalid category. Use: ${EVENT_CATEGORIES.join(", ")}`, 400);
+      }
+      where.category = { equals: category, mode: "insensitive" };
+    }
     if (location) where.location = { contains: location, mode: "insensitive" };
     if (time === "upcoming") where.endAt = { gte: now };
     if (time === "past") where.endAt = { lt: now };
@@ -147,6 +157,12 @@ export class EventService {
     const price = Number(body.price ?? 0);
     if (price < 0) throw new ApiError("price must be >= 0", 400);
 
+    const categoryInput = String(body.category || "").trim();
+    const category = normalizeCategory(categoryInput);
+    if (!category) {
+      throw new ApiError(`Invalid category. Use: ${EVENT_CATEGORIES.join(", ")}`, 400);
+    }
+
     const imageUrl = body.imageUrl ? String(body.imageUrl).trim() : null;
 
     const created = await this.prisma.event.create({
@@ -154,7 +170,7 @@ export class EventService {
         organizerId,
         name: String(body.name),
         description: String(body.description),
-        category: String(body.category),
+        category,
         location: String(body.location),
         startAt,
         endAt,
@@ -182,7 +198,14 @@ export class EventService {
 
     if (body.name !== undefined) data.name = String(body.name);
     if (body.description !== undefined) data.description = String(body.description);
-    if (body.category !== undefined) data.category = String(body.category);
+    if (body.category !== undefined) {
+      const nextCategoryInput = String(body.category || "").trim();
+      const nextCategory = normalizeCategory(nextCategoryInput);
+      if (!nextCategory) {
+        throw new ApiError(`Invalid category. Use: ${EVENT_CATEGORIES.join(", ")}`, 400);
+      }
+      data.category = nextCategory;
+    }
     if (body.location !== undefined) data.location = String(body.location);
     if (body.isPublished !== undefined) data.isPublished = Boolean(body.isPublished);
 
