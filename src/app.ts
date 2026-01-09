@@ -1,7 +1,8 @@
 import "reflect-metadata";
 import cors from "cors";
 import express, { Express } from "express";
-import { PORT } from "./config/env";
+
+import { PORT, FRONTEND_URLS } from "./config/env";
 import { errorMiddleware } from "./middlewares/error.middleware";
 
 import { AuthRouter } from "./modules/auth/auth.router";
@@ -9,6 +10,7 @@ import { EventRouter } from "./modules/event/event.router";
 import { TransactionRouter } from "./modules/transaction/transaction.router";
 import { UploadRouter } from "./modules/upload/upload.router";
 import { OrganizerRouter } from "./modules/organizer/organizer.router";
+import { PublicOrganizerRouter } from "./modules/organizer/public-organizer.router";
 
 import { initScheduler } from "./scripts";
 
@@ -24,11 +26,26 @@ export class App {
   }
 
   private configure() {
+    const allowedOrigins = (FRONTEND_URLS || "http://localhost:3000")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     this.app.use(
       cors({
-        origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+        origin: (origin, cb) => {
+          // allow Postman/curl (tanpa header Origin)
+          if (!origin) return cb(null, true);
+
+          // allow origin yang ada di whitelist
+          if (allowedOrigins.includes(origin)) return cb(null, true);
+
+          return cb(new Error(`CORS blocked for origin: ${origin}`));
+        },
+        credentials: true, // hapus kalau kamu tidak pakai cookie/session
       })
     );
+
     this.app.use(express.json());
   }
 
@@ -40,6 +57,7 @@ export class App {
     this.app.use("/transactions", new TransactionRouter().getRouter());
     this.app.use("/uploads", new UploadRouter().getRouter());
     this.app.use("/organizer", new OrganizerRouter().getRouter());
+    this.app.use("/organizers", new PublicOrganizerRouter().getRouter());
   }
 
   private handleError() {
@@ -47,8 +65,10 @@ export class App {
   }
 
   public start() {
+    // Railway inject process.env.PORT, dan sudah kita parse via PORT di env.ts
     this.app.listen(PORT, () => {
       console.log(`Server running on port : ${PORT}`);
+      console.log(`Allowed origins: ${FRONTEND_URLS}`);
     });
   }
 }

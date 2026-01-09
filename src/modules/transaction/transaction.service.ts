@@ -64,6 +64,56 @@ export class TransactionService {
     return { items };
   };
 
+  myAttendedEvents = async (customerId: number) => {
+    const now = new Date();
+
+    const events = await this.prisma.event.findMany({
+      where: {
+        endAt: { lte: now },
+        transactions: {
+          some: {
+            customerId,
+            status: TransactionStatus.DONE,
+          },
+        },
+      },
+      orderBy: { endAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        location: true,
+        startAt: true,
+        endAt: true,
+        imageUrl: true,
+        organizer: { select: { id: true, name: true } },
+        reviews: {
+          where: { userId: customerId },
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    const items = events.map((event) => ({
+      id: event.id,
+      name: event.name,
+      category: event.category,
+      location: event.location,
+      startAt: event.startAt,
+      endAt: event.endAt,
+      imageUrl: event.imageUrl,
+      organizer: event.organizer,
+      myReview: event.reviews[0] ?? null,
+    }));
+
+    return { items };
+  };
+
   create = async (body: any, customerId: number) => {
     const now = new Date();
 
@@ -99,6 +149,7 @@ export class TransactionService {
       // 2) voucher (optional)
       let voucherId: number | null = null;
       let voucherDiscount = 0;
+      let voucherUses = 0;
 
       if (voucherCode) {
         const v = await tx.voucher.findFirst({
@@ -112,18 +163,26 @@ export class TransactionService {
         });
         if (!v) throw new ApiError("Voucher not found / not active", 400);
 
+        voucherUses = qty;
         if (v.maxUses !== null) {
+          const remaining = v.maxUses - v.usedCount;
+          if (remaining < voucherUses) {
+            throw new ApiError("Voucher quota not enough for this qty", 400);
+          }
           const upd = await tx.voucher.updateMany({
-            where: { id: v.id, usedCount: { lt: v.maxUses } },
-            data: { usedCount: { increment: 1 } },
+            where: { id: v.id, usedCount: { lte: v.maxUses - voucherUses } },
+            data: { usedCount: { increment: voucherUses } },
           });
           if (upd.count === 0) throw new ApiError("Voucher max uses reached", 400);
         } else {
-          await tx.voucher.update({ where: { id: v.id }, data: { usedCount: { increment: 1 } } });
+          await tx.voucher.update({
+            where: { id: v.id },
+            data: { usedCount: { increment: voucherUses } },
+          });
         }
 
         voucherId = v.id;
-        voucherDiscount = Math.min(subtotal, v.discountAmount);
+        voucherDiscount = Math.min(subtotal, v.discountAmount * voucherUses);
       }
 
       // 3) coupon (optional)
@@ -375,6 +434,27 @@ export class TransactionService {
     });
     if (!trx) throw new ApiError("Transaction not found", 404);
     if (trx.decidedAt) return; // already decided
+    if (
+      ![TransactionStatus.WAITING_FOR_PAYMENT, TransactionStatus.WAITING_FOR_ADMIN_CONFIRMATION].includes(
+        trx.status
+      )
+    ) {
+      return;
+    }
+
+    const updated = await tx.transaction.updateMany({
+      where: {
+        id: trxId,
+        decidedAt: null,
+        status: { in: [TransactionStatus.WAITING_FOR_PAYMENT, TransactionStatus.WAITING_FOR_ADMIN_CONFIRMATION] },
+      },
+      data: {
+        status: newStatus,
+        decidedAt: now,
+        decisionDueAt: null,
+      },
+    });
+    if (updated.count === 0) return;
 
     // restore event seats
     await tx.event.update({
@@ -390,12 +470,19 @@ export class TransactionService {
       });
     }
 
-    // rollback voucher usedCount
+    // rollback voucher usedCount (per ticket)
     if (trx.voucherId) {
-      await tx.voucher.updateMany({
-        where: { id: trx.voucherId, usedCount: { gt: 0 } },
-        data: { usedCount: { decrement: 1 } },
+      const v = await tx.voucher.findUnique({
+        where: { id: trx.voucherId },
+        select: { usedCount: true },
       });
+      const dec = Math.min(trx.qty, v?.usedCount ?? 0);
+      if (dec > 0) {
+        await tx.voucher.update({
+          where: { id: trx.voucherId },
+          data: { usedCount: { decrement: dec } },
+        });
+      }
     }
 
     // rollback coupon usedAt
@@ -420,13 +507,6 @@ export class TransactionService {
       });
     }
 
-    await tx.transaction.update({
-      where: { id: trxId },
-      data: {
-        status: newStatus,
-        decidedAt: now,
-        decisionDueAt: null,
-      },
-    });
+    // status already updated above
   };
 }

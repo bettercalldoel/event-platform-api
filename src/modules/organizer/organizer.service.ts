@@ -46,6 +46,95 @@ export class OrganizerService {
     return { items };
   };
 
+  // === Public organizer profile (events + ratings + reviews) ===
+  publicProfile = async (organizerId: number) => {
+    const organizer = await this.prisma.user.findFirst({
+      where: { id: organizerId, role: "ORGANIZER" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatarUrl: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    if (!organizer) {
+      throw new ApiError("Organizer not found", 404);
+    }
+
+    const events = await this.prisma.event.findMany({
+      where: { organizerId, isPublished: true },
+      orderBy: { startAt: "asc" },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        location: true,
+        startAt: true,
+        endAt: true,
+        price: true,
+        remainingSeats: true,
+        imageUrl: true,
+      },
+    });
+
+    const eventIds = events.map((event) => event.id);
+    const ratingGroups =
+      eventIds.length === 0
+        ? []
+        : await this.prisma.review.groupBy({
+            by: ["eventId"],
+            where: { eventId: { in: eventIds } },
+            _avg: { rating: true },
+            _count: { _all: true },
+          });
+
+    const ratingMap = new Map<number, { avgRating: number | null; totalReviews: number }>();
+    for (const group of ratingGroups) {
+      ratingMap.set(group.eventId, {
+        avgRating: group._avg.rating ? Number(group._avg.rating) : null,
+        totalReviews: group._count._all ?? 0,
+      });
+    }
+
+    const eventItems = events.map((event) => {
+      const rating = ratingMap.get(event.id) ?? { avgRating: null, totalReviews: 0 };
+      return { ...event, ...rating };
+    });
+
+    const summaryAgg = await this.prisma.review.aggregate({
+      where: { event: { organizerId } },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+
+    const reviews = await this.prisma.review.findMany({
+      where: { event: { organizerId } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        user: { select: { id: true, name: true } },
+        event: { select: { id: true, name: true } },
+      },
+    });
+
+    return {
+      organizer,
+      summary: {
+        avgRating: summaryAgg._avg.rating ? Number(summaryAgg._avg.rating) : null,
+        totalReviews: summaryAgg._count._all ?? 0,
+      },
+      events: eventItems,
+      reviews,
+    };
+  };
+
   // === My Transactions (transaksi untuk event milik organizer) ===
   myTransactions = async (organizerId: number, status?: string) => {
     const where: any = {
@@ -124,8 +213,19 @@ export class OrganizerService {
       },
     });
 
+    const summary = items.reduce(
+      (acc, item) => {
+        acc.totalAttendees += 1;
+        acc.totalTickets += item.qty;
+        acc.totalRevenue += item.totalAmount;
+        return acc;
+      },
+      { totalAttendees: 0, totalTickets: 0, totalRevenue: 0 }
+    );
+
     return {
       event,
+      summary,
       items,
     };
   };

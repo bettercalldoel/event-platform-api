@@ -20,6 +20,17 @@ export class OrganizerController {
     return res.status(200).send(result);
   };
 
+  // GET /organizers/:id
+  publicProfile = async (req: Request, res: Response) => {
+    const organizerId = Number(req.params.id);
+    if (!organizerId || Number.isNaN(organizerId)) {
+      throw new ApiError("Invalid organizer id", 400);
+    }
+
+    const result = await this.service.publicProfile(organizerId);
+    return res.status(200).send(result);
+  };
+
   // GET /organizer/transactions
   myTransactions = async (req: Request, res: Response) => {
     const organizerId = Number(res.locals.user.id);

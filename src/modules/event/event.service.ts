@@ -17,6 +17,8 @@ export class EventService {
     const q = String(query.q || "").trim();
     const category = String(query.category || "").trim();
     const location = String(query.location || "").trim();
+    const time = String(query.time || "").trim().toLowerCase();
+    const now = new Date();
 
     const where: any = { isPublished: true };
 
@@ -28,6 +30,8 @@ export class EventService {
     }
     if (category) where.category = { contains: category, mode: "insensitive" };
     if (location) where.location = { contains: location, mode: "insensitive" };
+    if (time === "upcoming") where.endAt = { gte: now };
+    if (time === "past") where.endAt = { lt: now };
 
     const [events, total] = await Promise.all([
       this.prisma.event.findMany({

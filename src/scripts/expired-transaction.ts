@@ -62,8 +62,8 @@ async function expireWaitingForPayment(prisma: PrismaService, now: Date) {
     await prisma.$transaction(async (tx) => {
       // idempotent: pastikan status masih WAITING_FOR_PAYMENT
       const updated = await tx.transaction.updateMany({
-        where: { id: trx.id, status: "WAITING_FOR_PAYMENT" },
-        data: { status: "EXPIRED" },
+        where: { id: trx.id, status: "WAITING_FOR_PAYMENT", decidedAt: null },
+        data: { status: "EXPIRED", decidedAt: now, decisionDueAt: null },
       });
 
       if (updated.count === 0) return;
@@ -98,8 +98,8 @@ async function cancelWaitingForAdminConfirmation(prisma: PrismaService, now: Dat
   for (const trx of targets) {
     await prisma.$transaction(async (tx) => {
       const updated = await tx.transaction.updateMany({
-        where: { id: trx.id, status: "WAITING_FOR_ADMIN_CONFIRMATION" },
-        data: { status: "CANCELED" },
+        where: { id: trx.id, status: "WAITING_FOR_ADMIN_CONFIRMATION", decidedAt: null },
+        data: { status: "CANCELED", decidedAt: now, decisionDueAt: null },
       });
 
       if (updated.count === 0) return;
@@ -128,10 +128,17 @@ async function rollbackResources(tx: any, trx: TxLite) {
 
   // 3) rollback voucher usedCount (kalau transaksi pakai voucher)
   if (trx.voucherId) {
-    await tx.voucher.update({
+    const v = await tx.voucher.findUnique({
       where: { id: trx.voucherId },
-      data: { usedCount: { decrement: 1 } },
+      select: { usedCount: true },
     });
+    const dec = Math.min(trx.qty, v?.usedCount ?? 0);
+    if (dec > 0) {
+      await tx.voucher.update({
+        where: { id: trx.voucherId },
+        data: { usedCount: { decrement: dec } },
+      });
+    }
   }
 
   // 4) rollback coupon (biar bisa dipakai lagi)
