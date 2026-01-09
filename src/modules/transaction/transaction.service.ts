@@ -3,8 +3,8 @@ import { ApiError } from "../../utils/api-error";
 import { PointReason, TransactionStatus } from "@prisma/client";
 import { MailService } from "../mail/mail.service";
 
-function addHours(d: Date, hours: number) {
-  return new Date(d.getTime() + hours * 60 * 60 * 1000);
+function addMinutes(d: Date, minutes: number) {
+  return new Date(d.getTime() + minutes * 60 * 1000);
 }
 function addDays(d: Date, days: number) {
   return new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
@@ -37,6 +37,8 @@ export class TransactionService {
   };
 
   myTransactions = async (customerId: number) => {
+    const now = new Date();
+
     const items = await this.prisma.transaction.findMany({
       where: { customerId },
       orderBy: { createdAt: "desc" },
@@ -61,7 +63,16 @@ export class TransactionService {
       },
     });
 
-    return { items };
+    const withCountdown = items.map((item) => {
+      let paymentRemainingSeconds: number | null = null;
+      if (item.status === TransactionStatus.WAITING_FOR_PAYMENT) {
+        const diffMs = item.paymentDueAt.getTime() - now.getTime();
+        paymentRemainingSeconds = Math.max(0, Math.floor(diffMs / 1000));
+      }
+      return { ...item, paymentRemainingSeconds };
+    });
+
+    return { items: withCountdown };
   };
 
   myAttendedEvents = async (customerId: number) => {
@@ -225,7 +236,7 @@ export class TransactionService {
 
       // 5) create transaction
       const status = total === 0 ? TransactionStatus.DONE : TransactionStatus.WAITING_FOR_PAYMENT;
-      const paymentDueAt = total === 0 ? now : addHours(now, 2);
+      const paymentDueAt = total === 0 ? now : addMinutes(now, 2);
 
       const created = await tx.transaction.create({
         data: {
